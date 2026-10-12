@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Management System</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+    <h2>Student Management System</h2>
+
+    <!-- Hidden input for Update operation -->
+    <input type="hidden" id="studentId">
+
+    <!-- Input Form -->
+    <div class="form-group">
+        <input type="text" id="regNo" placeholder="Register No" required>
+        <input type="text" id="name" placeholder="Student Name" required>
+        <input type="email" id="email" placeholder="Student Email" required>
+        <input type="text" id="department" placeholder="Department" required>
+        <input type="number" id="year" placeholder="Year" min="1" max="4" required>
+        <button id="submitBtn" class="btn-add" onclick="saveStudent()">Add Student</button>
+        <button id="cancelBtn" style="display:none; background-color:#6c757d; color:white;" onclick="resetForm()">Cancel</button>
+    </div>
+
+    <!-- Search & Filter Bar -->
+    <div class="search-container">
+        <input type="text" id="searchInput" placeholder="Search by Reg No, name, email, department, or year..." onkeyup="filterStudents()">
+    </div>
+
+    <!-- Student Table -->
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Reg No</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Department</th>
+                <th>Year</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody id="studentTableBody"></tbody>
+    </table>
+</div>
+
+<script>
+    const API_URL = "http://localhost:8080/api/students";
+    let allStudents = [];
+
+    // Load all students
+    async function fetchStudents() {
+        try {
+            const res = await fetch(API_URL);
+            allStudents = await res.json();
+            renderTable(allStudents);
+        } catch (err) {
+            console.error("Error fetching students:", err);
+        }
+    }
+
+    // Render table
+    function renderTable(students) {
+        const tbody = document.getElementById("studentTableBody");
+        tbody.innerHTML = "";
+
+        if (!students || students.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color: #888;">No students found</td></tr>`;
+            return;
+        }
+
+        students.forEach(s => {
+            const regDisplay = s.regNo ? s.regNo : '-';
+            const yearDisplay = s.year ? s.year : '-';
+
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td>${s.id}</td>
+                <td>${regDisplay}</td>
+                <td>${s.name}</td>
+                <td>${s.email}</td>
+                <td>${s.department}</td>
+                <td>${yearDisplay}</td>
+                <td>
+                    <button class="btn-edit" data-id="${s.id}">Edit</button>
+                    <button class="btn-delete" onclick="deleteStudent(${s.id})">Delete</button>
+                </td>
+            `;
+            tr.querySelector(".btn-edit").addEventListener("click", () => populateEdit(s));
+            tbody.appendChild(tr);
+        });
+    }
+
+    // Filter
+    function filterStudents() {
+        const query = document.getElementById("searchInput").value.toLowerCase().trim();
+        const filtered = allStudents.filter(s => 
+            (s.regNo && s.regNo.toLowerCase().includes(query)) ||
+            (s.name && s.name.toLowerCase().includes(query)) ||
+            (s.email && s.email.toLowerCase().includes(query)) ||
+            (s.department && s.department.toLowerCase().includes(query)) ||
+            (s.year && s.year.toString().includes(query))
+        );
+        renderTable(filtered);
+    }
+
+    // Populate for edit
+    function populateEdit(student) {
+        document.getElementById("studentId").value = student.id;
+        document.getElementById("regNo").value = student.regNo || "";
+        document.getElementById("name").value = student.name || "";
+        document.getElementById("email").value = student.email || "";
+        document.getElementById("department").value = student.department || "";
+        document.getElementById("year").value = student.year || "";
+
+        const submitBtn = document.getElementById("submitBtn");
+        submitBtn.innerText = "Update Student";
+        submitBtn.style.backgroundColor = "#ffc107";
+        submitBtn.style.color = "#212529";
+
+        document.getElementById("cancelBtn").style.display = "inline-block";
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // Add or Update
+    async function saveStudent() {
+        const id = document.getElementById("studentId").value;
+        const regNo = document.getElementById("regNo").value.trim();
+        const name = document.getElementById("name").value.trim();
+        const email = document.getElementById("email").value.trim();
+        const department = document.getElementById("department").value.trim();
+        const year = document.getElementById("year").value.trim();
+
+        if (!regNo || !name || !email || !department || !year) {
+            alert("Please fill all fields!");
+            return;
+        }
+
+        const payload = {
+            regNo: regNo,
+            name: name,
+            email: email,
+            department: department,
+            year: parseInt(year)
+        };
+
+        const method = id ? "PUT" : "POST";
+        const url = id ? `${API_URL}/${id}` : API_URL;
+
+        try {
+            const res = await fetch(url, {
+                method: method,
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) {
+                const errorData = await res.json();
+                alert("Error: " + JSON.stringify(errorData));
+                return;
+            }
+
+            resetForm();
+            fetchStudents();
+        } catch (e) {
+            alert("Network/Server Error: " + e.message);
+        }
+    }
+
+    // Reset Form
+    function resetForm() {
+        document.getElementById("studentId").value = "";
+        document.getElementById("regNo").value = "";
+        document.getElementById("name").value = "";
+        document.getElementById("email").value = "";
+        document.getElementById("department").value = "";
+        document.getElementById("year").value = "";
+
+        const submitBtn = document.getElementById("submitBtn");
+        submitBtn.innerText = "Add Student";
+        submitBtn.style.backgroundColor = "#28a745";
+        submitBtn.style.color = "white";
+
+        document.getElementById("cancelBtn").style.display = "none";
+    }
+
+    // Delete
+    async function deleteStudent(id) {
+        if (confirm("Delete this student?")) {
+            await fetch(`${API_URL}/${id}`, { method: "DELETE" });
+            fetchStudents();
+        }
+    }
+
+    // Init
+    fetchStudents();
+</script>
+</body>
+</html>
